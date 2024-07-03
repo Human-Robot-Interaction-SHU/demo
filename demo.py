@@ -4,7 +4,7 @@ import torch
 import cv2 as cv
 from screeninfo import get_monitors
 from matplotlib import pyplot as plt
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 import numpy as np
 
 # Pose detection
@@ -12,6 +12,10 @@ from mediapipe.tasks.python.components.containers.landmark import NormalizedLand
 from mediapipe.tasks.python.vision.gesture_recognizer import GestureRecognizerResult
 from mediapipe.tasks.python import BaseOptions, vision
 import mediapipe as mp
+
+# Facial recognition
+from deepface import DeepFace
+
 # Get monitor size to set the size of the output image later
 try:
     monitor = get_monitors()
@@ -24,7 +28,7 @@ except:
 
 # Attention modules
 model = EyeTrackingForEveryone()
-#model.load_state_dict(torch.load("./horizontal_flipped_epochs_19"))
+model.load_state_dict(torch.load("./weights/attention_weights"))
 attn = AttentionModule(model.to('cuda'))
 
 
@@ -58,6 +62,16 @@ frame_number = 0
 # end pose detection
 
 
+# facial expression
+
+# initialize the Haar Cascade face detection model
+face_cascade = cv.CascadeClassifier(  # Create a CascadeClassifier object
+    cv.samples.findFile(cv.data.haarcascades + 'haarcascade_frontalface_default.xml'))
+
+
+# for output image
+font = ImageFont.truetype("/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf", 36)
+
 cam = cv.VideoCapture(0)
 cam.set(cv.CAP_PROP_FRAME_WIDTH, 1280)
 cam.set(cv.CAP_PROP_FRAME_HEIGHT, 720)
@@ -83,6 +97,8 @@ while True:
 
             # Draw circle where gaze detected
             out_img_draw.arc([(attention_out[0][0]-25, attention_out[0][1]-25),(attention_out[0][0]+25, attention_out[0][1]+25)], start=0, end=360, fill=(255, 255, 255))
+            out_img_draw.text((1000, 10), f"Gaze location : {int(attention_out[0][0])}, {int(attention_out[0][1])}", font=font)
+            print(attention_out[0][0])
 
         # body pose
         frame_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
@@ -90,6 +106,20 @@ while True:
         sign_recognizer.recognize_async(mp_image, frame_number)
         pose_results = pose.process(frame_rgb)
         mp_drawing.draw_landmarks(image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
+        # facial expression
+        gray = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
+        faces = face_cascade.detectMultiScale(gray)
+        try:
+            result = DeepFace.analyze(image, actions=['emotion'])
+            dominant_emotion = result[0]['dominant_emotion']
+        except ValueError:
+            print("no face detected")
+            dominant_emotion = "No emotion detected"
+
+
+        if dominant_emotion != "No emotion detected":
+            out_img_draw.text((10, 10), dominant_emotion, font=font)
 
     else:
         print("Failed to get image from webcam")

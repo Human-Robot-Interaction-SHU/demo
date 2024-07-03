@@ -13,7 +13,7 @@ class AttentionModule():
     """
     Takes an image
     """
-    def __init__(self, gaze_model="./weights/attention_weights"):
+    def __init__(self, gaze_model):
         self.device = 'cuda'
         self.gaze_model = gaze_model
         self.base_options = python.BaseOptions("./weights/blaze_face_short_range.tflite")
