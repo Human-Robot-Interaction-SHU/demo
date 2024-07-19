@@ -289,16 +289,45 @@ async def find_next_text_emotion(time_param):
 
 async def draw_emotion_info(out_img_draw, font, frame_number):
     print(frame_number)
-    current_time_seconds = frame_number / 30.0  # Assuming 30 frames per second
-    emotion_tuple = await find_next_text_emotion(current_time_seconds)
-    if emotion_tuple:
-        _, text, emotion_str = emotion_tuple
-        out_img_draw.text((10, 50), f"{text} [{emotion_str}]", font=font)
-        #print(f"{text} [{emotion_str}]")
+    #current_time_seconds = frame_number / 30.0  # Assuming 30 frames per second
+    # emotion_tuple = await find_next_text_emotion(current_time_seconds)
+    # if emotion_tuple:
+    #     _, text, emotion_str = emotion_tuple
+    #     out_img_draw.text((10, 50), f"{text} [{emotion_str}]", font=font)
+    #     #print(f"{text} [{emotion_str}]")
+
+import concurrent.futures
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+
+async def while_run():
+    i = 0
+    while True:
+        await draw_emotion_info(None, None, i)
+        i += 1
+        #await asyncio.sleep(1)
+        time.sleep(1)
+
+
+# Function to run an async task in a thread
+def run_async_in_thread(async_func):
+    return asyncio.run(async_func)
+
+
+async def run_both():
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as executor:
+        # Schedule async tasks to run in separate threads
+        task1_future = loop.run_in_executor(executor, run_async_in_thread, main())
+        task2_future = loop.run_in_executor(executor, run_async_in_thread, while_run())
+
+        # Wait for both tasks to complete (they won't in this case, as they run indefinitely)
+        await asyncio.gather(task1_future, task2_future)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_both())
 
 
 
