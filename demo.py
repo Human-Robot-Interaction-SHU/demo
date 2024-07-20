@@ -12,6 +12,7 @@ from mediapipe.tasks.python.components.containers.landmark import NormalizedLand
 from mediapipe.tasks.python.vision.gesture_recognizer import GestureRecognizerResult
 from mediapipe.tasks.python import BaseOptions, vision
 import mediapipe as mp
+import os
 
 # Facial recognition
 from deepface import DeepFace
@@ -28,11 +29,8 @@ except:
 
 # Attention modules
 model = EyeTrackingForEveryone()
-model.load_state_dict(torch.load("./weights/attention_weights"))
-attn = AttentionModule(model.to('cuda'))
-
-
-# Pose detection
+model.load_state_dict(torch.load("./weights/attention_weights", map_location=torch.device('cpu')))
+attn = AttentionModule(model.to('cpu'))
 
 handSign = ""
 handPosition: NormalizedLandmark = NormalizedLandmark(x=0.5, y=0.5)
@@ -50,9 +48,11 @@ mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
-model_path = ('./weights/gesture_recognizer.task')
+model_path = 'C:/Users/AbiolaSoft/Documents/GitHub/demo/weights/gesture_recognizer.task'
+with open(model_path, 'rb') as file:
+    model_data = file.read()
 
-base_options = BaseOptions(model_asset_path=model_path)
+base_options = BaseOptions(model_asset_buffer=model_data)
 VisionRunningMode = mp.tasks.vision.RunningMode
 options = vision.GestureRecognizerOptions(base_options=base_options, running_mode=VisionRunningMode.LIVE_STREAM,
                                           result_callback=setResults)
@@ -70,7 +70,7 @@ face_cascade = cv.CascadeClassifier(  # Create a CascadeClassifier object
 
 
 # for output image
-font = ImageFont.truetype("/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf", 36)
+font = ImageFont.load_default(36)
 
 cam = cv.VideoCapture(0)
 cam.set(cv.CAP_PROP_FRAME_WIDTH, 1280)

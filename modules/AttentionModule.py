@@ -14,7 +14,7 @@ class AttentionModule():
     Takes an image
     """
     def __init__(self, gaze_model):
-        self.device = 'cuda'
+        self.device = 'cpu'
         self.gaze_model = gaze_model
         self.base_options = python.BaseOptions("./weights/blaze_face_short_range.tflite")
         self.options = vision.FaceDetectorOptions(base_options=self.base_options)
