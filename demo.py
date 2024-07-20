@@ -48,7 +48,7 @@ mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
-model_path = 'C:/Users/AbiolaSoft/Documents/GitHub/demo/weights/gesture_recognizer.task'
+model_path = './weights/gesture_recognizer.task'
 with open(model_path, 'rb') as file:
     model_data = file.read()
 
@@ -76,7 +76,9 @@ cam = cv.VideoCapture(0)
 cam.set(cv.CAP_PROP_FRAME_WIDTH, 1280)
 cam.set(cv.CAP_PROP_FRAME_HEIGHT, 720)
 
-
+# Retrieve and print the FPS value
+fps = cam.get(cv.CAP_PROP_FPS)
+print(f"Camera FPS: {fps}")
 
 while True:
     result, image = cam.read()
@@ -108,14 +110,33 @@ while True:
         mp_drawing.draw_landmarks(image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         # facial expression
+            # Convert the image to grayscale
         gray = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
+
+        # Detect faces in the image
         faces = face_cascade.detectMultiScale(gray)
-        try:
-            result = DeepFace.analyze(image, actions=['emotion'])
-            dominant_emotion = result[0]['dominant_emotion']
-        except ValueError:
-            print("no face detected")
+
+        # Check if any faces are detected
+        if len(faces) > 0:
+            try:
+                # Analyze the image for emotions
+                analysis_result = DeepFace.analyze(image, actions=['emotion'], enforce_detection=False)
+                dominant_emotion = analysis_result[0]['dominant_emotion']
+                print(f"Dominant Emotion: {dominant_emotion}")
+            except ValueError as ve:
+                print(f"ValueError: {ve}")
+                dominant_emotion = "No emotion detected"
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                dominant_emotion = "No emotion detected"
+        else:
+            print("No faces detected in the image.")
             dominant_emotion = "No emotion detected"
+
+        # Display the dominant emotion on the image
+        if dominant_emotion != "No emotion detected":
+            out_img_draw.text((10, 10), dominant_emotion, font=font)
+
 
 
         if dominant_emotion != "No emotion detected":
