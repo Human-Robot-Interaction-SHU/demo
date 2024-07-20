@@ -110,7 +110,7 @@ while True:
         mp_drawing.draw_landmarks(image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         # facial expression
-            # Convert the image to grayscale
+        # Convert the image to grayscale
         gray = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
 
         # Detect faces in the image
@@ -136,12 +136,6 @@ while True:
         # Display the dominant emotion on the image
         if dominant_emotion != "No emotion detected":
             out_img_draw.text((10, 10), dominant_emotion, font=font)
-
-
-
-        if dominant_emotion != "No emotion detected":
-            out_img_draw.text((10, 10), dominant_emotion, font=font)
-
     else:
         print("Failed to get image from webcam")
 
