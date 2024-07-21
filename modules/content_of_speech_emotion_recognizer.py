@@ -1,22 +1,143 @@
-import os
+from threading import Thread
 import asyncio
-import wave
-import shutil
-from datetime import datetime
-import json
+import queue
+import sys
+import re
+from google.cloud import speech
+from google.oauth2 import service_account
+import pyaudio
 
 from transformers import (
-    AutoTokenizer
+    Pipeline,
+    PreTrainedTokenizer,
+    ModelCard,
+    PreTrainedModel,
+    TFPreTrainedModel,
+    BertPreTrainedModel,
+    BertModel
 )
-from .speech_content_model import BertForMultiLabelClassification, MultiLabelPipeline
 
-from .google_speech_to_text import StreamingTranscriber
+from transformers.pipelines import ArgumentHandler
+from typing import Union, Optional, List, Dict, Any
+import numpy as np
+import torch.nn as nn
+from transformers import AutoTokenizer, BertForSequenceClassification, pipeline
 
-tokenizer = AutoTokenizer.from_pretrained("monologg/bert-base-cased-goemotions-original")
-model = BertForMultiLabelClassification.from_pretrained("monologg/bert-base-cased-goemotions-original")
-pipeline = MultiLabelPipeline(model=model, tokenizer=tokenizer, threshold=0.3)
+class BertForMultiLabelClassification(BertPreTrainedModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.num_labels = config.num_labels
 
-service_account_info = {
+        self.bert = BertModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = nn.Linear(config.hidden_size, self.config.num_labels)
+        self.loss_fct = nn.BCEWithLogitsLoss()
+
+        self.init_weights()
+
+    def forward(
+            self,
+            input_ids=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            inputs_embeds=None,
+            labels=None,
+    ):
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+        )
+        pooled_output = outputs[1]
+
+        pooled_output = self.dropout(pooled_output)
+        logits = self.classifier(pooled_output)
+
+        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
+
+        if labels is not None:
+            loss = self.loss_fct(logits, labels)
+            outputs = (loss,) + outputs
+
+        return outputs  # (loss), logits, (hidden_states), (attentions)
+
+
+class MultiLabelPipeline(Pipeline):
+    def __init__(
+            self,
+            model: Union[PreTrainedModel, TFPreTrainedModel],
+            tokenizer: PreTrainedTokenizer,
+            modelcard: Optional[ModelCard] = None,
+            framework: Optional[str] = None,
+            task: str = "",
+            args_parser: ArgumentHandler = None,
+            device: int = -1,
+            binary_output: bool = False,
+            threshold: float = 0.3
+    ):
+        super().__init__(
+            model=model,
+            tokenizer=tokenizer,
+            modelcard=modelcard,
+            framework=framework,
+            args_parser=args_parser,
+            device=device,
+            binary_output=binary_output,
+            task=task
+        )
+        self.threshold = threshold
+
+    def _sanitize_parameters(self, **kwargs):
+        preprocess_kwargs = {}
+        forward_kwargs = {}
+        postprocess_kwargs = {}
+        return preprocess_kwargs, forward_kwargs, postprocess_kwargs
+
+    def preprocess(self, inputs: Union[str, List[str]], **kwargs) -> Dict[str, Any]:
+        return self.tokenizer(inputs, return_tensors='pt', padding=True, truncation=True)
+
+    def _forward(self, model_inputs: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        return self.model(**model_inputs)
+
+    def postprocess(self, model_outputs: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
+        if isinstance(model_outputs, tuple):
+            model_outputs = model_outputs[0]
+
+        logits = model_outputs.detach().numpy()
+        scores = 1 / (1 + np.exp(-logits))  # Apply sigmoid
+
+        results = []
+        for item in scores:
+            labels = []
+            score_values = []
+            for idx, s in enumerate(item):
+                if s > self.threshold:
+                    labels.append(self.model.config.id2label[idx])
+                    score_values.append(s)
+            results.append({"labels": labels, "scores": score_values})
+        return results
+
+
+class ContentOfSpeechEmotionRecognizer:
+    def __init__(self):
+        self.tokenizer = AutoTokenizer.from_pretrained("monologg/bert-base-cased-goemotions-original")
+        self.model = BertForSequenceClassification.from_pretrained("monologg/bert-base-cased-goemotions-original")
+        self.pipeline = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer, return_all_scores=True)
+
+    async def get_emotion(self, text):
+        result = self.pipeline(text)
+        emotions = [label['label'] for label in result[0] if label['score'] > 0.3]
+        return text, emotions
+
+
+
+
+google_config = {
   "type": "service_account",
   "project_id": "human-robot-interaction-427202",
   "private_key_id": "5a8fa3a319d052106f64b5a857148b54784b9a18",
@@ -32,123 +153,152 @@ service_account_info = {
 
 
 
-class ContentOfSpeechEmotionRecognizer:
+# Audio recording parameters
+RATE = 16000
+CHUNK = int(RATE / 10)  # 100ms
+
+# Global list to store emotion data
+emotion_data = []
+
+
+class MicrophoneStream:
+    """Opens a recording stream as a generator yielding the audio chunks."""
+
+    def __init__(self, rate=16000, chunk=CHUNK):
+        self._rate = rate
+        self._chunk = chunk
+        self._buff = queue.Queue()
+        self.closed = True
+
+    def __enter__(self):
+        self._audio_interface = pyaudio.PyAudio()
+        self._audio_stream = self._audio_interface.open(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=self._rate,
+            input=True,
+            frames_per_buffer=self._chunk,
+            stream_callback=self._fill_buffer,
+        )
+        self.closed = False
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self._audio_stream.stop_stream()
+        self._audio_stream.close()
+        self.closed = True
+        self._buff.put(None)
+        self._audio_interface.terminate()
+
+    def _fill_buffer(self, in_data, frame_count, time_info, status_flags):
+        self._buff.put(in_data)
+        return None, pyaudio.paContinue
+
+    def generator(self):
+        while not self.closed:
+            chunk = self._buff.get()
+            if chunk is None:
+                return
+            data = [chunk]
+            while True:
+                try:
+                    chunk = self._buff.get(block=False)
+                    if chunk is None:
+                        return
+                    data.append(chunk)
+                except queue.Empty:
+                    break
+            yield b"".join(data)
+
+    async def listen_print_loop(self, responses, result_handler):
+        num_chars_printed = 0
+        for response in responses:
+            if not response.results:
+                continue
+            result = response.results[0]
+            if not result.alternatives:
+                continue
+            transcript = result.alternatives[0].transcript
+            overwrite_chars = " " * (num_chars_printed - len(transcript))
+            if not result.is_final:
+                sys.stdout.write(transcript + overwrite_chars + "\r")
+                sys.stdout.flush()
+                num_chars_printed = len(transcript)
+            else:
+                time_seconds = result.result_end_time.seconds + result.result_end_time.microseconds / 1e6
+
+                # Call the provided result_handler function
+                await result_handler(time_seconds, transcript)
+
+                if re.search(r"\b(exit|quit)\b", transcript, re.I):
+                    print("Exiting..")
+                    break
+                num_chars_printed = 0
+
+        return transcript
+
+
+class GoogleSpeechToText:
     def __init__(self):
-        self.audio_buffer = b''
-        self.buffer_size_limit = 1024 * 1024 * 0.25 # 1 MB limit for buffer
-        self.buffer_timeout = 10  # 20 seconds timeout for sending buffer
-        self.session_id = None
-        self.session_folder = None
-        self.buffer_count = 0
-        self.send_task = None
-        self.session_audio_filename = None
-        self.session_transcription_filename = None
-        self.audio_chunks = []
-
-        # Initialize tokenizer, model, and pipeline
-        self.tokenizer = AutoTokenizer.from_pretrained("monologg/bert-base-cased-goemotions-original")
-        self.model = BertForMultiLabelClassification.from_pretrained("monologg/bert-base-cased-goemotions-original")
-        self.pipeline = MultiLabelPipeline(model=self.model, tokenizer=self.tokenizer, threshold=0.3)
-        self.streaming_transcriber = StreamingTranscriber(service_account_info=service_account_info)
-        self.initialize_session()
-
-    def initialize_session(self):
-        # Generate a unique session ID (you can use a timestamp or any unique identifier)
-        self.session_id = datetime.now().strftime("%Y%m%d%H%M%S")
-        self.session_folder = os.path.join("session_data", self.session_id)
-        os.makedirs(self.session_folder, exist_ok=True)
-        self.session_audio_filename = os.path.join(self.session_folder, "session_audio.wav")
-        self.session_transcription_filename = os.path.join(self.session_folder, "session_transcription.txt")
-
-        # Create or open session audio file in write binary mode if it doesn't exist
-        if not os.path.exists(self.session_audio_filename):
-            with wave.open(self.session_audio_filename, 'wb') as session_audio_wf:
-                session_audio_wf.setnchannels(1)
-                session_audio_wf.setsampwidth(2)  # 2 bytes (16 bits)
-                session_audio_wf.setframerate(16000)  # 48 kHz
-
-    async def receive_audio_data(self, bytes_data):
-
-        self.audio_buffer += bytes_data
-        self.audio_chunks.append(bytes_data)
-        print(len(self.audio_buffer))
-        if len(self.audio_buffer) >= self.buffer_size_limit:
-            return await self.process_buffer()
-        # # else:
-        # #     if not self.send_task:
-        # #         self.send_task = asyncio.create_task(self.send_buffer_after_timeout())
-        # return None
-
-    async def send_buffer_after_timeout(self):
-        try:
-            await asyncio.sleep(self.buffer_timeout)
-            return await self.process_buffer()
-        except asyncio.CancelledError as e:
-            print(f"send_buffer_after_timeout task was cancelled: {e}")
-            return None
+        self.language_code = "en-US"
+        self.cred = service_account.Credentials.from_service_account_info(google_config)
+        self.client = speech.SpeechClient(credentials=self.cred)
+        self.config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=RATE,
+            language_code=self.language_code,
+        )
+        self.streaming_config = speech.StreamingRecognitionConfig(
+            config=self.config, interim_results=True
+        )
 
 
-    async def process_buffer(self, write_to_storage=True):
-        if not self.audio_buffer:
-            return None
+async def main():
 
-        audio_content = self.audio_buffer
-        self.audio_buffer = b''
-        if self.send_task:
-            self.send_task.cancel()
-            self.send_task = None
+    speech_to_text = GoogleSpeechToText()
 
-        if write_to_storage:
-            buffer_folder = os.path.join(self.session_folder, f"buffer_{self.buffer_count}")
-            os.makedirs(buffer_folder, exist_ok=True)
+    # Initialize emotion recognizer (assuming ContentOfSpeechEmotionRecognizer)
+    emotion_recognizer = ContentOfSpeechEmotionRecognizer()
 
-            audio_filename = os.path.join(buffer_folder, "audio.wav")
-            temp_filename = "temp_audio.wav"
+    async def emotion_handler(time_seconds, transcript):
+        text, emotions = await emotion_recognizer.get_emotion(transcript)
+        emotion_str = ", ".join(emotions)
+        emotion_data.append((time_seconds, text, emotion_str))  # Store in global list
+        # print(emotion_data)
+        # Optionally print here if needed
+        print(f"[{time_seconds:.2f}] {text} [({emotion_str})]")
 
-            # Create or open a temporary file to append new data
-            with wave.open(temp_filename, 'wb') as temp_wf:
-                temp_wf.setnchannels(1)
-                temp_wf.setsampwidth(2)  # 2 bytes (16 bits)
-                temp_wf.setframerate(48000)  # 48 kHz
+    # Initialize MicrophoneStream
+    with MicrophoneStream(RATE, CHUNK) as stream:
+        audio_generator = stream.generator()
+        requests = (
+            speech.StreamingRecognizeRequest(audio_content=content)
+            for content in audio_generator
+        )
+        responses = speech_to_text.client.streaming_recognize(speech_to_text.streaming_config, requests)
+        await stream.listen_print_loop(responses, emotion_handler)
 
-                # Write existing audio file content to temporary file
-                if os.path.exists(audio_filename):
-                    with wave.open(audio_filename, 'rb') as original_wf:
-                        temp_wf.writeframes(original_wf.readframes(original_wf.getnframes()))
 
-                # Append new audio data
-                temp_wf.writeframes(audio_content)
+async def find_next_text_emotion(time_param):
+    print(time_param, emotion_data)
+    for time_seconds, text, emotion_str in emotion_data:
+        if time_seconds > time_param:
+            return time_seconds, text, emotion_str
+    return None  # If no tuple found
 
-            # Replace the original file with the temporary file
-            shutil.move(temp_filename, audio_filename)
 
-        audio_generator = (chunk for chunk in self.audio_chunks)
-        text = " ".join([t async for t in self.streaming_transcriber.transcribe_streaming(audio_generator)])
+async def draw_emotion_info(out_img_draw, font, frame_number):
+    print(frame_number)
+    current_time_seconds = frame_number / 30.0  # Assuming 30 frames per second
+    emotion_tuple = await find_next_text_emotion(current_time_seconds)
+    if emotion_tuple:
+        _, text, emotion_str = emotion_tuple
+        out_img_draw.text((10, 50), f"{text} [{emotion_str}]", font=font)
+        #print(f"{text} [{emotion_str}]")
 
-        if write_to_storage:
-            transcription_filename = os.path.join(buffer_folder, "text.txt")
-            with open(transcription_filename, 'w') as text_file:
-                text_file.write(text)
 
-        result = self.pipeline(text)
-        for item in result:
-            item['scores'] = [float(score) for score in item['scores']]
-        json_response = {
-            "transcription": text,
-            "emotion_detection": result
-        }
-        json_result = json.dumps(json_response)
+if __name__ == "__main__":
+    asyncio.run(main())
 
-        self.buffer_count += 1
-        self.audio_chunks = []
 
-        if write_to_storage:
-            # Append to session audio file in append binary mode
-            with open(self.session_audio_filename, 'ab') as session_audio_file:
-                session_audio_file.write(audio_content)
 
-            # Append to session transcription file
-            with open(self.session_transcription_filename, 'a') as session_transcription_file:
-                session_transcription_file.write(text + "\n")
-
-        return json_result
