@@ -1,21 +1,16 @@
 import asyncio
-
 from modules.PoseDetection import PoseDetectionModule
-from modules.content_of_speech_emotion_recognizer import run_audio_detection
-from modules.models import EyeTrackingForEveryone
+from modules.content_of_speech_emotion_recognizer import ContentOfSpeechEmotionRecognizer
 from modules.AttentionModule import AttentionModule
-import torch
 import cv2 as cv
 from screeninfo import get_monitors
-from matplotlib import pyplot as plt
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import mediapipe as mp
-import os
 from concurrent.futures import ThreadPoolExecutor
-
-# Facial recognition
 from deepface import DeepFace
+
+content_of_speech = ContentOfSpeechEmotionRecognizer()
 
 class FaceDetectionModule:
 
@@ -114,6 +109,8 @@ class DisplayModule:
 
     def __init__(self, cam_display_mod):
         self.cam_display = cam_display_mod
+        self.out_img = Image.new('RGB', (self.cam_display.screen_width, self.cam_display.screen_height), color=(153, 153, 255))
+        self.out_img_draw = ImageDraw.Draw(self.out_img)
 
     def draw_pose_result_on_image(self, img, pose_landmarks, out_img):
         img = img.copy()
@@ -134,51 +131,77 @@ class DisplayModule:
             out_img_draw.arc([(attention_out[0][0] - 25, attention_out[0][1] - 25),
                             (attention_out[0][0] + 25, attention_out[0][1] + 25)], start=0, end=360,
                             fill=(255, 255, 255))
-            out_img_draw.text((1000, 10), f"Gaze location : {int(attention_out[0][0])}, {int(attention_out[0][1])}",
-                            font=self.cam_display.font)
+            out_img_draw.text((1000, 10), f"Gaze location : {int(attention_out[0][0])}, {int(attention_out[0][1])}", font=self.cam_display.font)
             print(attention_out[0][0])
 
     def draw_face_result(self, dominant_emotion, out_img_draw):
-        out_img_draw.text((10, 10), dominant_emotion, font=self.cam_display.font)
-
-    def display_results(self, img, results):
-        out_img = Image.new('RGB', (self.cam_display.screen_width, self.cam_display.screen_height), color=(153, 153, 255))
-        out_img_draw = ImageDraw.Draw(out_img)
-
-        self.draw_pose_result_on_image(img, results["pose"].pose_landmarks, out_img)
-        self.draw_attention_result(results["attention"], out_img_draw)
-        self.draw_face_result(results["face"], out_img_draw)
-
-        cv.imshow("Demo", np.asarray(out_img))  # This will open an independent window
+        out_img_draw.text((10, 10), f"Face: {dominant_emotion}", font=self.cam_display.font)
 
 
-async def run_audio():
-    await run_audio_detection()
+    def draw_background_boxes_for_texts(self):
+        screen_width = self.cam_display.screen_width
+        screen_height = self.cam_display.screen_height
+        box_height = 150
+
+        # Create a semi-transparent black box
+        box_img = Image.new('RGBA', (screen_width, box_height), (0, 0, 0, 128))  # 128 for 50% opacity
+        top_box_position = (0, 0)
+        bottom_box_position = (0, screen_height - box_height - 80)
+
+        # Paste the boxes onto the output image
+        self.out_img.paste(box_img, top_box_position, box_img)
+        self.out_img.paste(box_img, bottom_box_position, box_img)
+
+
+    def display_results(self, img, video_results, audio_result):
+        self.draw_pose_result_on_image(img, video_results["pose"].pose_landmarks, self.out_img)
+
+        self.draw_background_boxes_for_texts()
+
+        self.out_img_draw.text((10, self.cam_display.screen_height - 200), "Content of speech", font=self.cam_display.font)
+
+        if audio_result:
+            audio_text = audio_result[1] if audio_result[1] else " - - "
+            formatted_audio_result = f"{audio_result[2]}: {audio_text}"
+
+            self.out_img_draw.text(
+                (10, self.cam_display.screen_height - 150),
+                formatted_audio_result,
+                font=self.cam_display.font
+            )
+
+        self.draw_attention_result(video_results["attention"], self.out_img_draw)
+        self.draw_face_result(video_results["face"], self.out_img_draw)
+
+        cv.imshow("Demo", np.asarray(self.out_img))  # This will open an independent window
 
 
 # Function to run an async task in a thread
 def run_async_in_thread(async_func):
-    return asyncio.run(async_func)
+    try:
+        return asyncio.run(async_func)
+    except Exception as e:
+        print(f"Exception caught in thread: {e}")
 
 
 async def run_both():
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor() as executor:
         # Schedule async tasks to run in separate threads
-        task1_future = loop.run_in_executor(executor, run_async_in_thread, run_audio())
-        task2_future = loop.run_in_executor(executor, run_async_in_thread, run_video_detection())
+        speech_task = loop.run_in_executor(executor, run_async_in_thread, content_of_speech.run())
+        video_task = loop.run_in_executor(executor, run_async_in_thread, run_video_detection())
 
         # Wait for both tasks to complete (they won't in this case, as they run indefinitely)
-        await asyncio.gather(task1_future, task2_future)
+        await asyncio.gather(video_task, speech_task)
 
 
 async def run_video_detection():
+    cam_monitor = CameraAndMonitorModule()
+    display = DisplayModule(cam_monitor)
     attn = AttentionModule()
     pose_module = PoseDetectionModule('./weights/gesture_recognizer.task')
     face_module = FaceDetectionModule()
-    cam_monitor = CameraAndMonitorModule()
     video_emotions_recognizer = VideoEmotionsRecognizer(attn, pose_module, face_module)
-    display = DisplayModule(cam_monitor)
 
     frame_number = 0
 
@@ -191,7 +214,10 @@ async def run_video_detection():
         # image successfully read from webcam
         if result:
             res = video_emotions_recognizer.get_emotion_results_from_models(image, frame_number)
-            display.display_results(image, res)
+            audio_emo = content_of_speech.emotion_results[len(content_of_speech.emotion_results)-1] \
+                if len(content_of_speech.emotion_results) > 0 else None
+            display.display_results(image, res, audio_emo) #emotion_data[len(emotion_data)-1].text
+
         else:
             print("Failed to get image from webcam")
 

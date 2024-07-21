@@ -128,11 +128,34 @@ class ContentOfSpeechEmotionRecognizer:
         self.tokenizer = AutoTokenizer.from_pretrained("monologg/bert-base-cased-goemotions-original")
         self.model = BertForSequenceClassification.from_pretrained("monologg/bert-base-cased-goemotions-original")
         self.pipeline = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer, return_all_scores=True)
+        self.speech_to_text = GoogleSpeechToText()
+        self.emotion_results = []
 
     async def get_emotion(self, text):
         result = self.pipeline(text)
         emotions = [label['label'] for label in result[0] if label['score'] > 0.3]
         return text, emotions
+
+    async def run(self):
+
+        async def emotion_handler(time_seconds, transcript):
+            text, emotions = await self.get_emotion(transcript)
+            emotion_str = ", ".join(emotions)
+            self.emotion_results.append((time_seconds, text, emotion_str))  # Store in global list
+            # print(emotion_data)
+            # Optionally print here if needed
+            #print(f"[{time_seconds:.2f}] {text} [({emotion_str})]")
+
+        # Initialize MicrophoneStream
+        with MicrophoneStream(RATE, CHUNK) as stream:
+            audio_generator = stream.generator()
+            requests = (
+                speech.StreamingRecognizeRequest(audio_content=content)
+                for content in audio_generator
+            )
+            responses = self.speech_to_text.client.streaming_recognize(self.speech_to_text.streaming_config, requests)
+            await stream.listen_print_loop(responses, emotion_handler)
+
 
 
 
@@ -158,8 +181,6 @@ RATE = 16000
 CHUNK = int(RATE / 10)  # 100ms
 
 # Global list to store emotion data
-emotion_data = []
-
 
 class MicrophoneStream:
     """Opens a recording stream as a generator yielding the audio chunks."""
@@ -251,83 +272,5 @@ class GoogleSpeechToText:
         self.streaming_config = speech.StreamingRecognitionConfig(
             config=self.config, interim_results=True
         )
-
-
-async def run_audio_detection():
-
-    speech_to_text = GoogleSpeechToText()
-
-    # Initialize emotion recognizer (assuming ContentOfSpeechEmotionRecognizer)
-    emotion_recognizer = ContentOfSpeechEmotionRecognizer()
-
-    async def emotion_handler(time_seconds, transcript):
-        text, emotions = await emotion_recognizer.get_emotion(transcript)
-        emotion_str = ", ".join(emotions)
-        emotion_data.append((time_seconds, text, emotion_str))  # Store in global list
-        # print(emotion_data)
-        # Optionally print here if needed
-        print(f"[{time_seconds:.2f}] {text} [({emotion_str})]")
-
-    # Initialize MicrophoneStream
-    with MicrophoneStream(RATE, CHUNK) as stream:
-        audio_generator = stream.generator()
-        requests = (
-            speech.StreamingRecognizeRequest(audio_content=content)
-            for content in audio_generator
-        )
-        responses = speech_to_text.client.streaming_recognize(speech_to_text.streaming_config, requests)
-        await stream.listen_print_loop(responses, emotion_handler)
-
-
-def find_next_text_emotion(time_param):
-    # print(time_param, emotion_data)
-    for time_seconds, text, emotion_str in emotion_data:
-        if time_seconds > time_param:
-            print("Time sec, param", time_seconds, time_param)
-            return time_seconds, text, emotion_str
-    return None  # If no tuple found
-
-
-async def draw_emotion_info(out_img_draw, font, frame_number):
-    print(frame_number)
-    current_time_seconds = frame_number / 30.0  # Assuming 30 frames per second
-    emotion_tuple = find_next_text_emotion(current_time_seconds)
-    if emotion_tuple:
-        _, text, emotion_str = emotion_tuple
-        #out_img_draw.text((10, 50), f"{text} [{emotion_str}]", font=font)
-        print(f"{text} [{emotion_str}]")
-
-
-from concurrent.futures import ThreadPoolExecutor
-
-
-async def while_run():
-    i = 0
-    while True:
-        await draw_emotion_info(None, None, i*30)
-        i += 1
-        await asyncio.sleep(5)
-
-
-# Function to run an async task in a thread
-def run_async_in_thread(async_func):
-    return asyncio.run(async_func)
-
-
-async def run_both():
-    loop = asyncio.get_running_loop()
-    with ThreadPoolExecutor() as executor:
-        # Schedule async tasks to run in separate threads
-        task1_future = loop.run_in_executor(executor, run_async_in_thread, run_audio_detection())
-        task2_future = loop.run_in_executor(executor, run_async_in_thread, while_run())
-
-        # Wait for both tasks to complete (they won't in this case, as they run indefinitely)
-        await asyncio.gather(task1_future, task2_future)
-
-
-if __name__ == "__main__":
-    asyncio.run(run_both())
-
-
 
 
