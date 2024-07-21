@@ -162,7 +162,7 @@ def draw_face_result(dominant_emotion, out_img_draw):
     out_img_draw.text((10, 10), dominant_emotion, font=font)
 
 
-def detect_image_emotion(img, frame_num):
+def detect_draw_image_emotion(img, frame_num):
 
     out_img = Image.new('RGB', (screen_width, screen_height), color = (153, 153, 255))
     out_img_draw = ImageDraw.Draw(out_img)
@@ -187,7 +187,7 @@ while True:
 
     # image successfully read from webcam
     if result:
-        detect_image_emotion(image, frame_number)
+        detect_draw_image_emotion(image, frame_number)
     else:
         print("Failed to get image from webcam")
 
