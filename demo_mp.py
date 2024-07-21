@@ -28,10 +28,25 @@ except:
     screen_width=1920
     screen_height=1080
 
+# Settings for output image
+
+x_padding = int(screen_width * .05)
+top_row_module_width = (screen_width - (x_padding * 4)) // 3
+y_padding = x_padding
+
+row_1_mod_1 = (x_padding, y_padding)
+row_1_mod_1_title = (row_1_mod_1[0], row_1_mod_1[1] - 40)
+
+row_1_mod_2 = (row_1_mod_1[0] + x_padding + top_row_module_width, y_padding)
+row_1_mod_2_title = (row_1_mod_2[0], row_1_mod_2[1] - 50)
+
+row_1_mod_3 = (row_1_mod_2[0] + x_padding + top_row_module_width, y_padding)
+row_1_mod_3_title = (row_1_mod_3[0], row_1_mod_3[1] - 60)
+
 # Attention modules
 model = EyeTrackingForEveryone()
 model.load_state_dict(torch.load("./weights/attention_weights"))
-attn = AttentionModule(model.to('cuda'))
+attn = AttentionModule(model.to('cpu'))
 
 # Pose detection
 
@@ -98,6 +113,12 @@ def facial_expression(frame):
 
     return dominant_emotion
 
+
+def attention(frame):
+    attention_out = attn.get_x_y_from_image(frame)
+    if attention_out[0] is not False:
+
+        return attention_out[0]
 class CurrentState():
     def __init__(self):
         self.facial_expression = None
@@ -111,18 +132,35 @@ def update_webcam():
 cam_read_success, last_frame_read = update_webcam()
 last_facial_result = None
 last_gesture_pose_result = None
+last_attention_result = None
 frame_number = 0
 def update_output_image():
     output_image = Image.new('RGB', (screen_width, screen_height), color = (153, 153, 255))
     out_img_draw = ImageDraw.Draw(output_image)
 
-    if last_gesture_pose_result is not None:
-        output_image.paste(Image.fromarray(last_gesture_pose_result), box=(0, 0))
-    else:
-        "No pose"
+    out_img_draw.text(row_1_mod_1_title,
+                      f"Gesture and Pose", font=font)
+    out_img_draw.text(row_1_mod_2_title, f"Facial Expression Emotion : {last_facial_result}", font=font)
 
-    if last_facial_result is not None:
-        out_img_draw.text((10, 10), last_facial_result, font=font)
+
+    if last_gesture_pose_result is not None:
+
+        gesture_out = Image.fromarray(last_gesture_pose_result)
+        video_height = gesture_out.height * (gesture_out.width // top_row_module_width)
+        output_image.paste(gesture_out.resize((top_row_module_width, video_height)), box=row_1_mod_1)
+
+    # if last_facial_result is not None:
+    #     out_img_draw.text((1000, 10), last_facial_result, font=font)
+    #
+    if last_attention_result is not None:
+        out_img_draw.text(row_1_mod_3_title,
+                          f"Attention : {int(last_attention_result[0])}, {int(last_attention_result[1])}", font=font)
+    else:
+        out_img_draw.text(row_1_mod_3_title,
+                          f"Attention :", font=font)
+    #     # Draw circle where gaze detected
+    #     out_img_draw.text((1500, 10), f"Gaze location : {int(last_attention_result[0][0])}, {int(last_attention_result[0][1])}",
+    #                       font=font)
 
     return output_image # This will open an independent window
 
@@ -133,7 +171,8 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
             executor.submit(update_webcam) : "cam_image",
             executor.submit(facial_expression, last_frame_read) : "facial_expression",
-            executor.submit(pose_and_gesture, frame=last_frame_read, frame_number=frame_number) : "gesture_and_pose"
+            executor.submit(pose_and_gesture, frame=last_frame_read, frame_number=frame_number) : "gesture_and_pose",
+            executor.submit(attention, last_frame_read): "attention"
         }
 
         while futures:
@@ -158,6 +197,9 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
                     last_gesture_pose_result = task.result()
                     print(f"The last pose result was  {frame_number}")
 
+                elif task_name == "attention":
+                    last_attention_result = task.result()
+                    print(f"The last attention result was  {frame_number}")
 
 
                 output_image = update_output_image()
@@ -175,4 +217,7 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
             if "gesture_and_pose" not in running_tasks:
                 next_worker = executor.submit(pose_and_gesture, frame=last_frame_read, frame_number=frame_number)
                 futures[next_worker] = "gesture_and_pose"
+            if "attention" not in running_tasks:
+                next_worker = executor.submit(attention, last_frame_read)
+                futures[next_worker] = "attention"
 
