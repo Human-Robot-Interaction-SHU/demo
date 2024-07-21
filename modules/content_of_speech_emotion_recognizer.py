@@ -253,7 +253,7 @@ class GoogleSpeechToText:
         )
 
 
-async def main():
+async def run_audio_detection():
 
     speech_to_text = GoogleSpeechToText()
 
@@ -318,7 +318,7 @@ async def run_both():
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor() as executor:
         # Schedule async tasks to run in separate threads
-        task1_future = loop.run_in_executor(executor, run_async_in_thread, main())
+        task1_future = loop.run_in_executor(executor, run_async_in_thread, run_audio_detection())
         task2_future = loop.run_in_executor(executor, run_async_in_thread, while_run())
 
         # Wait for both tasks to complete (they won't in this case, as they run indefinitely)

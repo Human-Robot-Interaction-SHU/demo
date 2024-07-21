@@ -9,11 +9,18 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from modules.models import EyeTrackingForEveryone
+
+
 class AttentionModule():
     """
     Takes an image
     """
-    def __init__(self, gaze_model):
+    def __init__(self):
+        model = EyeTrackingForEveryone()
+        model.load_state_dict(torch.load("./weights/attention_weights", map_location=torch.device('cpu')))
+        gaze_model = model.to('cpu')
+
         self.device = 'cpu'
         self.gaze_model = gaze_model
         self.base_options = python.BaseOptions("./weights/blaze_face_short_range.tflite")
