@@ -7,7 +7,7 @@ import cv2 as cv
 from concurrent.futures import ThreadPoolExecutor
 from application.face_analysis.FaceDetectionModule import FaceDetectionModule
 from io_modules.DisplayModule import DisplayModule
-from io_modules.camera_and_monitor_module import CameraAndMonitorModule
+from io_modules.CameraAndMonitorModule import CameraAndMonitorModule
 
 content_of_speech = ContentOfSpeechEmotionRecognizer()
 
