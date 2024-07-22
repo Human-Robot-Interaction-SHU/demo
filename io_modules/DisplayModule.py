@@ -43,8 +43,8 @@ class DisplayModule:
         out_img_draw.text((10, 10), f"Face: {dominant_emotion}", font=self.cam_display.font)
 
     def draw_tone_result(self, tone=None):
-        self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 200),
-                               "Tone: " + tone if tone else "Tone: -- ", font=self.cam_display.font)
+        self.out_img_draw.text((self.cam_display.screen_width - 500, self.cam_display.screen_height - 200),
+                               "Tone of voice: " + tone if tone else "Tone of voice: -- ", font=self.cam_display.font)
 
 
     def draw_background_boxes_for_texts(self):
@@ -69,7 +69,7 @@ class DisplayModule:
 
         self.draw_tone_result()
 
-        self.out_img_draw.text((10, self.cam_display.screen_height - 200), "Content of speech", font=self.cam_display.font)
+        self.out_img_draw.text((10, self.cam_display.screen_height - 200), "Content of speech: ", font=self.cam_display.font)
 
         if audio_result:
             audio_text = audio_result[1] if audio_result[1] else " - - "
