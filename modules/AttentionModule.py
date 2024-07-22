@@ -9,10 +9,10 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from modules.models import EyeTrackingForEveryone
+from modules.Models import EyeTrackingForEveryone
 
 
-class AttentionModule():
+class AttentionModule:
     """
     Takes an image
     """

@@ -1,6 +1,6 @@
 import asyncio
-from modules.PoseDetection import PoseDetectionModule
-from modules.content_of_speech_emotion_recognizer import ContentOfSpeechEmotionRecognizer
+from modules.PoseDetectionModule import PoseDetectionModule
+from modules.ContentOfSpeechModule import ContentOfSpeechEmotionRecognizer
 from modules.AttentionModule import AttentionModule
 import cv2 as cv
 from screeninfo import get_monitors
