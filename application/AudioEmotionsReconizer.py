@@ -1,16 +1,34 @@
 import queue
 import pyaudio
 import threading
-from application.SharedConstants import AUDIO_SAMPLE_RATE
+from application.SharedConstants import AUDIO_SAMPLE_RATE, CHUNK
 from application.content_of_speech.ContentOfSpeechModule import ContentOfSpeechEmotionRecognizer
 from application.tone_of_voice.ToneOfVoiceModule import ToneOfVoiceModule
 
+
+def calculate_chunks_for_seconds(rate, chunk_size, seconds):
+    """
+    Calculate the number of chunks needed to accumulate a specified number of seconds of audio.
+
+    Parameters:
+    rate (int): The sampling rate in samples per second (Hz).
+    chunk_size (int): The number of frames per chunk.
+    seconds (float): The number of seconds of audio to accumulate.
+
+    Returns:
+    int: The number of chunks needed to accumulate the specified number of seconds of audio.
+    """
+    frames_per_second = rate
+    frames_needed = int(seconds * frames_per_second)
+    number_of_chunks = (frames_needed + chunk_size - 1) // chunk_size  # Ceiling division
+    return number_of_chunks
 
 class AudioEmotionRecognizer:
 
     def __init__(self):
         self.content_of_speech = ContentOfSpeechEmotionRecognizer()
         self.tone_of_voice_module = ToneOfVoiceModule()  # Instantiate ToneOfVoiceModule
+        self.max_chunk_size = calculate_chunks_for_seconds(AUDIO_SAMPLE_RATE, CHUNK, 5)
 
     async def run(self):
 
@@ -27,7 +45,7 @@ class AudioEmotionRecognizer:
                 accumulated_chunks = []
                 for chunk in audio_generator:
                     accumulated_chunks.append(chunk)
-                    if len(accumulated_chunks) >= 79:
+                    if len(accumulated_chunks) >= self.max_chunk_size:
                         # Combine accumulated chunks into one byte array
                         audio_data = b"".join(accumulated_chunks)
                         self.tone_of_voice_module.process_audio(audio_data)  # Process the accumulated audio
@@ -44,7 +62,7 @@ class AudioEmotionRecognizer:
 
 # Audio recording parameters
 
-CHUNK = int(AUDIO_SAMPLE_RATE / 10)  # 100ms
+
 
 # Global list to store emotion data
 
