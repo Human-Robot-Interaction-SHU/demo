@@ -44,7 +44,7 @@ class DisplayModule:
 
     def draw_tone_result(self, tone=None):
         self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 200),
-                               "Tone: " + tone if tone else " -- ", font=self.cam_display.font)
+                               "Tone: " + tone if tone else "Tone: -- ", font=self.cam_display.font)
 
 
     def draw_background_boxes_for_texts(self):
