@@ -6,7 +6,6 @@ import pyaudio
 from pydub import AudioSegment
 
 
-
 class ToneOfVoiceModule:
     def __init__(self):
         # Set up the device and model pipeline
