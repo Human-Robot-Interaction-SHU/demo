@@ -1,13 +1,6 @@
-from threading import Thread
-import asyncio
 import queue
-import sys
-import re
-from google.cloud import speech
-from google.oauth2 import service_account
 import pyaudio
 import threading
-
 from application.SharedConstants import AUDIO_SAMPLE_RATE
 from application.content_of_speech.ContentOfSpeechModule import ContentOfSpeechEmotionRecognizer
 from application.tone_of_voice.ToneOfVoiceModule import ToneOfVoiceModule
