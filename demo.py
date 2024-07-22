@@ -18,7 +18,7 @@ class FaceDetectionModule:
             cv.samples.findFile(cv.data.haarcascades + 'haarcascade_frontalface_default.xml'))
 
     def detect_emotion(self, img):
-        return DeepFace.analyze(img, actions=['emotion'])  # , enforce_detection=False)
+        return DeepFace.analyze(img, actions=['emotion'], enforce_detection=False)
 
 
 class CameraAndMonitorModule:
@@ -128,15 +128,23 @@ class DisplayModule:
 
     def draw_attention_result(self, attention_out, out_img_draw):
         if attention_out[0] is not False:
-            out_img_draw.arc([(attention_out[0][0] - 25, attention_out[0][1] - 25),
-                            (attention_out[0][0] + 25, attention_out[0][1] + 25)], start=0, end=360,
-                            fill=(255, 255, 255))
+            # out_img_draw.arc([(attention_out[0][0] - 25, attention_out[0][1] - 25),
+            #                 (attention_out[0][0] + 25, attention_out[0][1] + 25)], start=0, end=360,
+            #                 fill=(0, 0, 255))
+            out_img_draw.ellipse([(attention_out[0][0] - 25, attention_out[0][1] - 25),
+                                  (attention_out[0][0] + 25, attention_out[0][1] + 25)],
+                                 fill=(0, 255, 0), outline=None)
+
             out_img_draw.text((1000, 10), f"Gaze location : {int(attention_out[0][0])}, {int(attention_out[0][1])}", font=self.cam_display.font)
             print(attention_out[0][0])
 
     def draw_face_result(self, dominant_emotion, out_img_draw):
         out_img_draw.text((10, 10), f"Face: {dominant_emotion}", font=self.cam_display.font)
 
+    def draw_tone_result(self, tone=None):
+        self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 200), "Tone", font=self.cam_display.font)
+        self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 150), tone if tone else " -- ",
+                               font=self.cam_display.font)
 
     def draw_background_boxes_for_texts(self):
         screen_width = self.cam_display.screen_width
@@ -145,18 +153,20 @@ class DisplayModule:
 
         # Create a semi-transparent black box
         box_img = Image.new('RGBA', (screen_width, box_height), (0, 0, 0, 128))  # 128 for 50% opacity
+        box_img_bottom = Image.new('RGBA', (screen_width, 200), (0, 0, 0, 128))  # 128 for 50% opacity
         top_box_position = (0, 0)
         bottom_box_position = (0, screen_height - box_height - 80)
 
         # Paste the boxes onto the output image
         self.out_img.paste(box_img, top_box_position, box_img)
-        self.out_img.paste(box_img, bottom_box_position, box_img)
-
+        self.out_img.paste(box_img_bottom, bottom_box_position, box_img_bottom)
 
     def display_results(self, img, video_results, audio_result):
         self.draw_pose_result_on_image(img, video_results["pose"].pose_landmarks, self.out_img)
 
         self.draw_background_boxes_for_texts()
+
+        self.draw_tone_result()
 
         self.out_img_draw.text((10, self.cam_display.screen_height - 200), "Content of speech", font=self.cam_display.font)
 

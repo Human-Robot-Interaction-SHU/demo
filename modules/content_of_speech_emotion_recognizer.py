@@ -142,9 +142,6 @@ class ContentOfSpeechEmotionRecognizer:
             text, emotions = await self.get_emotion(transcript)
             emotion_str = ", ".join(emotions)
             self.emotion_results.append((time_seconds, text, emotion_str))  # Store in global list
-            # print(emotion_data)
-            # Optionally print here if needed
-            #print(f"[{time_seconds:.2f}] {text} [({emotion_str})]")
 
         # Initialize MicrophoneStream
         with MicrophoneStream(RATE, CHUNK) as stream:
