@@ -35,16 +35,17 @@ class DisplayModule:
                                   (attention_out[0][0] + 25, attention_out[0][1] + 25)],
                                  fill=(0, 255, 0), outline=None)
 
-            out_img_draw.text((1000, 10), f"Gaze location : {int(attention_out[0][0])}, {int(attention_out[0][1])}", font=self.cam_display.font)
-            print(attention_out[0][0])
+            out_img_draw.text((1000, 10), f"Gaze location : {int(attention_out[0][0])}, {int(attention_out[0][1])}",
+                              font=self.cam_display.font)
+            #print(attention_out[0][0])
 
     def draw_face_result(self, dominant_emotion, out_img_draw):
         out_img_draw.text((10, 10), f"Face: {dominant_emotion}", font=self.cam_display.font)
 
     def draw_tone_result(self, tone=None):
-        self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 200), "Tone", font=self.cam_display.font)
-        self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 150), tone if tone else " -- ",
-                               font=self.cam_display.font)
+        self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 200),
+                               "Tone: " + tone if tone else " -- ", font=self.cam_display.font)
+
 
     def draw_background_boxes_for_texts(self):
         screen_width = self.cam_display.screen_width
