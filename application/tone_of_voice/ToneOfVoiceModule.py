@@ -5,6 +5,8 @@ import io
 import pyaudio
 from pydub import AudioSegment
 
+from application.SharedConstants import AUDIO_SAMPLE_RATE
+
 
 class ToneOfVoiceModule:
     def __init__(self):
@@ -16,6 +18,8 @@ class ToneOfVoiceModule:
                                    model="ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
                                    device=self.device)
 
+        self.emotion_results = []
+
         # Initialize PyAudio
         self.p = pyaudio.PyAudio()
         self.stream = None
@@ -24,7 +28,7 @@ class ToneOfVoiceModule:
         audio = AudioSegment(
             data=audio_bytes,
             sample_width=2,  # 2 bytes for 16-bit audio
-            frame_rate=16000,
+            frame_rate=AUDIO_SAMPLE_RATE,
             channels=1  # Mono audio
         )
         wav_io = io.BytesIO()
@@ -39,7 +43,7 @@ class ToneOfVoiceModule:
         audio_file.seek(0)
 
         # Load the audio using librosa
-        audio, sr = librosa.load(audio_file, sr=16000)
+        audio, sr = librosa.load(audio_file, sr=AUDIO_SAMPLE_RATE)
 
         # Make the prediction
         result = self.classifier(audio)
@@ -48,4 +52,4 @@ class ToneOfVoiceModule:
 
         print(f"Top Emotion: {main_emotion['label']}, Score: {main_emotion['score']:.4f}")
 
-        return main_emotion['label']
+        self.emotion_results.append(main_emotion['label'])

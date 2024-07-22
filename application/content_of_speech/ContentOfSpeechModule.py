@@ -6,6 +6,7 @@ import re
 from google.cloud import speech
 from google.oauth2 import service_account
 import pyaudio
+import threading
 
 from transformers import (
     Pipeline,
@@ -22,6 +23,9 @@ from typing import Union, Optional, List, Dict, Any
 import numpy as np
 import torch.nn as nn
 from transformers import AutoTokenizer, BertForSequenceClassification, pipeline
+
+from application.tone_of_voice.ToneOfVoiceModule import ToneOfVoiceModule
+
 
 class BertForMultiLabelClassification(BertPreTrainedModel):
     def __init__(self, config):
@@ -136,98 +140,6 @@ class ContentOfSpeechEmotionRecognizer:
         emotions = [label['label'] for label in result[0] if label['score'] > 0.3]
         return text, emotions
 
-    async def run(self):
-
-        def emotion_handler(time_seconds, transcript):
-            text, emotions = self.get_emotion(transcript)
-            emotion_str = ", ".join(emotions)
-            self.emotion_results.append((time_seconds, text, emotion_str))  # Store in global list
-
-        # Initialize MicrophoneStream
-        with MicrophoneStream(RATE, CHUNK) as stream:
-            audio_generator = stream.generator()
-            requests = (
-                speech.StreamingRecognizeRequest(audio_content=content)
-                for content in audio_generator
-            )
-            responses = self.speech_to_text.client.streaming_recognize(self.speech_to_text.streaming_config, requests)
-            stream.listen_print_loop(responses, emotion_handler)
-
-
-
-
-
-google_config = {
-  "type": "service_account",
-  "project_id": "human-robot-interaction-427202",
-  "private_key_id": "5a8fa3a319d052106f64b5a857148b54784b9a18",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDGLRnNSECMfO3E\nuLaJswQYwK/v5N9rQL39TA/SDel/47cBcAb9n2CEmRdH8RILj33wpJ/ccwUrA5df\nop/HoPzFynPPXcQtNC3HEi3wrOGxPlPI75pL2aUE34jb0LngtqfGUstfD+trphQt\nWlFvczFcHXwgEv1N64qkXYFNid8isAp7IldZdtjRwKFSf4aNCvRGiUrARMWhRAMc\nYhL1VypxKBGHM3Qhsov7RU+wt8GGTWLYbeup64pdLT//U0B6vaTn72bTRq+7c0bE\nrKhzFEeepCEwzzJ25mIIBVvPserBqxpikWuwvZOxzuykpBVifuWgRcikcG0g0K4x\nFGb1icFxAgMBAAECggEAXgnHvRgkfSXJA/jssYHPl1lUAz91XyUNIpWFylTMsOGj\nFR0OTCplN/aXTA2SVQcFqXvM2eSAls0w9vIp5KY5XDf55XQmo5anhFfVkefPfvZG\n9snvyz9fZWUXQcuVcJLsIRlnpNfejCn2WCEMFJkyWnYpUOUB6wgytVUjhuI+Dmxp\n2tsoIMh6F3fadWoIQy/4AoqZ6hq+Yi5HMHpcUFC/1Qf+erYcZ2hJbRsFM+PoGGQ4\neHli1gu9XiUlAViglyWLh5o88G6LQrApQBEmrBW585u6zxwo6NNQibHeVGuvpzlA\ngnY54Pm2s7pJXrwyrhz9tv7BmfElfbAnh1i594NIewKBgQDp0vKonqE2tg3a76W6\n1ZEbwe9E0uEMzHqHRJyOnuuDxaoByZQlD0rzrM3L/fhZFnITWRwtOys2CoC0uthx\nds4aHkLAsZcuXEmlgeI696JU4OmWHuSeIphLF5h0iBjmnEs0P7IYHWTMzEG+Q38x\nJoPRpJNZzfRn6+ggvZOvT08yRwKBgQDY+Kcvbp1Jbz2FLt/j2dFMyQ2coqiyf1N/\nNBeMtDCNj21a0GPrN/xiSiQ0eqzWPniKhtk8As0xRLAZVXcVkI9u433YmZqhu8r1\nmVqrV9KGT9GhW/RRTiRAhtTUwWjEtBNVApGEAq2wB2fCE4EaGfHNV1fT4gPr5RlO\n8CTmdDjShwKBgFG8MKDq2pXia9N1ZCx8TT4zu60GPi8YJ1izjjp4qQEmDniTe1q9\nDslBRasiOzcBFp1Wz/ersD4yy6zhh5maGw+cNl9fdOZ60i+tyGQufitHd7/HSslQ\ndIYDWIKbtICgb9Vy0pGFbN/+IpkcxRBsUzXsXqnMybuuBjWzrzVf9uIvAoGAXd4N\nbl7bm0aOBg2GfSvh+edNhUN12mttcy3VNmFKVCQF+nEHmV7KSLesvCuKlNHIEp5O\nY0EPBs6hpQQtld3Jv/6Zlli15ly5bNGgwVooUUU8+yMuKvK0iloKv9TA/8CsUG3h\nCIykGfDKOdN4WhN5Yg30iE1Sxv6BmX4ZaL5FSwcCgYAQTPKGqqEfsW2oDjcZfcGY\nentgPBuHmyA1u621zBUpHC5GH9HOxnbFFAolED6DaEqaZpjYQ9OrPtsiFklxEBGY\nUM610x45TB1wHvetaRhYauyXXtaZC+UofOuSk+mfSoxlvwCsn5lrFLfY7dXzA3Va\nNA9sLichxePueEovOO1ZDA==\n-----END PRIVATE KEY-----\n",
-  "client_email": "speech-human-robot-interation@human-robot-interaction-427202.iam.gserviceaccount.com",
-  "client_id": "108185768289001893274",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/speech-human-robot-interation%40human-robot-interaction-427202.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
-
-
-
-# Audio recording parameters
-RATE = 16000
-CHUNK = int(RATE / 10)  # 100ms
-
-# Global list to store emotion data
-
-class MicrophoneStream:
-    """Opens a recording stream as a generator yielding the audio chunks."""
-
-    def __init__(self, rate=16000, chunk=CHUNK):
-        self._rate = rate
-        self._chunk = chunk
-        self._buff = queue.Queue()
-        self.closed = True
-
-    def __enter__(self):
-        self._audio_interface = pyaudio.PyAudio()
-        self._audio_stream = self._audio_interface.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=self._rate,
-            input=True,
-            frames_per_buffer=self._chunk,
-            stream_callback=self._fill_buffer,
-        )
-        self.closed = False
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self._audio_stream.stop_stream()
-        self._audio_stream.close()
-        self.closed = True
-        self._buff.put(None)
-        self._audio_interface.terminate()
-
-    def _fill_buffer(self, in_data, frame_count, time_info, status_flags):
-        self._buff.put(in_data)
-        return None, pyaudio.paContinue
-
-    def generator(self):
-        while not self.closed:
-            chunk = self._buff.get()
-            if chunk is None:
-                return
-            data = [chunk]
-            while True:
-                try:
-                    chunk = self._buff.get(block=False)
-                    if chunk is None:
-                        return
-                    data.append(chunk)
-                except queue.Empty:
-                    break
-            yield b"".join(data)
-
     def listen_print_loop(self, responses, result_handler):
         num_chars_printed = 0
         for response in responses:
@@ -256,6 +168,40 @@ class MicrophoneStream:
         return transcript
 
 
+    def run(self, audio_generator):
+
+        def emotion_handler(time_seconds, transcript):
+            text, emotions = self.get_emotion(transcript)
+            emotion_str = ", ".join(emotions)
+            self.emotion_results.append((time_seconds, text, emotion_str))  # Store in global list
+
+        requests = (
+            speech.StreamingRecognizeRequest(audio_content=content)
+            for content in audio_generator
+        )
+        responses = self.speech_to_text.client.streaming_recognize(self.speech_to_text.streaming_config,
+                                                                   requests)
+        self.listen_print_loop(responses, emotion_handler)
+
+
+
+google_config = {
+  "type": "service_account",
+  "project_id": "human-robot-interaction-427202",
+  "private_key_id": "5a8fa3a319d052106f64b5a857148b54784b9a18",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDGLRnNSECMfO3E\nuLaJswQYwK/v5N9rQL39TA/SDel/47cBcAb9n2CEmRdH8RILj33wpJ/ccwUrA5df\nop/HoPzFynPPXcQtNC3HEi3wrOGxPlPI75pL2aUE34jb0LngtqfGUstfD+trphQt\nWlFvczFcHXwgEv1N64qkXYFNid8isAp7IldZdtjRwKFSf4aNCvRGiUrARMWhRAMc\nYhL1VypxKBGHM3Qhsov7RU+wt8GGTWLYbeup64pdLT//U0B6vaTn72bTRq+7c0bE\nrKhzFEeepCEwzzJ25mIIBVvPserBqxpikWuwvZOxzuykpBVifuWgRcikcG0g0K4x\nFGb1icFxAgMBAAECggEAXgnHvRgkfSXJA/jssYHPl1lUAz91XyUNIpWFylTMsOGj\nFR0OTCplN/aXTA2SVQcFqXvM2eSAls0w9vIp5KY5XDf55XQmo5anhFfVkefPfvZG\n9snvyz9fZWUXQcuVcJLsIRlnpNfejCn2WCEMFJkyWnYpUOUB6wgytVUjhuI+Dmxp\n2tsoIMh6F3fadWoIQy/4AoqZ6hq+Yi5HMHpcUFC/1Qf+erYcZ2hJbRsFM+PoGGQ4\neHli1gu9XiUlAViglyWLh5o88G6LQrApQBEmrBW585u6zxwo6NNQibHeVGuvpzlA\ngnY54Pm2s7pJXrwyrhz9tv7BmfElfbAnh1i594NIewKBgQDp0vKonqE2tg3a76W6\n1ZEbwe9E0uEMzHqHRJyOnuuDxaoByZQlD0rzrM3L/fhZFnITWRwtOys2CoC0uthx\nds4aHkLAsZcuXEmlgeI696JU4OmWHuSeIphLF5h0iBjmnEs0P7IYHWTMzEG+Q38x\nJoPRpJNZzfRn6+ggvZOvT08yRwKBgQDY+Kcvbp1Jbz2FLt/j2dFMyQ2coqiyf1N/\nNBeMtDCNj21a0GPrN/xiSiQ0eqzWPniKhtk8As0xRLAZVXcVkI9u433YmZqhu8r1\nmVqrV9KGT9GhW/RRTiRAhtTUwWjEtBNVApGEAq2wB2fCE4EaGfHNV1fT4gPr5RlO\n8CTmdDjShwKBgFG8MKDq2pXia9N1ZCx8TT4zu60GPi8YJ1izjjp4qQEmDniTe1q9\nDslBRasiOzcBFp1Wz/ersD4yy6zhh5maGw+cNl9fdOZ60i+tyGQufitHd7/HSslQ\ndIYDWIKbtICgb9Vy0pGFbN/+IpkcxRBsUzXsXqnMybuuBjWzrzVf9uIvAoGAXd4N\nbl7bm0aOBg2GfSvh+edNhUN12mttcy3VNmFKVCQF+nEHmV7KSLesvCuKlNHIEp5O\nY0EPBs6hpQQtld3Jv/6Zlli15ly5bNGgwVooUUU8+yMuKvK0iloKv9TA/8CsUG3h\nCIykGfDKOdN4WhN5Yg30iE1Sxv6BmX4ZaL5FSwcCgYAQTPKGqqEfsW2oDjcZfcGY\nentgPBuHmyA1u621zBUpHC5GH9HOxnbFFAolED6DaEqaZpjYQ9OrPtsiFklxEBGY\nUM610x45TB1wHvetaRhYauyXXtaZC+UofOuSk+mfSoxlvwCsn5lrFLfY7dXzA3Va\nNA9sLichxePueEovOO1ZDA==\n-----END PRIVATE KEY-----\n",
+  "client_email": "speech-human-robot-interation@human-robot-interaction-427202.iam.gserviceaccount.com",
+  "client_id": "108185768289001893274",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/speech-human-robot-interation%40human-robot-interaction-427202.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
+
+
+
+
 class GoogleSpeechToText:
     def __init__(self):
         self.language_code = "en-US"
@@ -263,7 +209,7 @@ class GoogleSpeechToText:
         self.client = speech.SpeechClient(credentials=self.cred)
         self.config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=RATE,
+            sample_rate_hertz=16000,
             language_code=self.language_code,
         )
         self.streaming_config = speech.StreamingRecognitionConfig(

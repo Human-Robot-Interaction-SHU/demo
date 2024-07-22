@@ -62,24 +62,27 @@ class DisplayModule:
         self.out_img.paste(box_img, top_box_position, box_img)
         self.out_img.paste(box_img_bottom, bottom_box_position, box_img_bottom)
 
-    def display_results(self, img, video_results, audio_result):
-        self.draw_pose_result_on_image(img, video_results["pose"].pose_landmarks, self.out_img)
-
-        self.draw_background_boxes_for_texts()
-
-        self.draw_tone_result()
-
+    def draw_content_of_speech_result(self, content_of_speech_result):
         self.out_img_draw.text((10, self.cam_display.screen_height - 200), "Content of speech: ", font=self.cam_display.font)
 
-        if audio_result:
-            audio_text = audio_result[1] if audio_result[1] else " - - "
-            formatted_audio_result = f"{audio_result[2]}: {audio_text}"
+        if content_of_speech_result:
+            audio_text = content_of_speech_result[1] if content_of_speech_result[1] else " - - "
+            formatted_audio_result = f"{content_of_speech_result[2]}: {audio_text}"
 
             self.out_img_draw.text(
                 (10, self.cam_display.screen_height - 150),
                 formatted_audio_result,
                 font=self.cam_display.font
             )
+
+    def display_results(self, img, video_results, content_of_speech_result, tone_of_voice_result):
+        self.draw_pose_result_on_image(img, video_results["pose"].pose_landmarks, self.out_img)
+
+        self.draw_background_boxes_for_texts()
+
+        self.draw_tone_result(tone_of_voice_result)
+
+        self.draw_content_of_speech_result(content_of_speech_result)
 
         self.draw_attention_result(video_results["attention"], self.out_img_draw)
         self.draw_face_result(video_results["face"], self.out_img_draw)
