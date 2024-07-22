@@ -1,22 +1,33 @@
-import cv2 as cv
 import torch
-import torch.nn as nn
-import torchvision
 from torchvision.transforms import v2
 from PIL import Image
 import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from application.attention.Models import EyeTrackingForEveryone
+import os
 
-class AttentionModule():
+# Get the absolute path of the current script
+script_path = os.path.abspath(__file__)
+
+# Get the directory of the current script
+script_dir = os.path.dirname(script_path)
+
+
+class AttentionModule:
     """
     Takes an image
     """
-    def __init__(self, gaze_model):
+    def __init__(self):
+        model = EyeTrackingForEveryone()
+
+        model.load_state_dict(torch.load(os.path.join(script_dir, "weights/attention_weights"), map_location=torch.device('cpu')))
+        gaze_model = model.to('cpu')
+
         self.device = 'cpu'
         self.gaze_model = gaze_model
-        self.base_options = python.BaseOptions("./weights/blaze_face_short_range.tflite")
+        self.base_options = python.BaseOptions(os.path.join(script_dir, "weights/blaze_face_short_range.tflite"))
         self.options = vision.FaceDetectorOptions(base_options=self.base_options)
         self.detector = vision.FaceDetector.create_from_options(self.options)
 
@@ -27,7 +38,7 @@ class AttentionModule():
         self.VisionRunningMode = mp.tasks.vision.RunningMode
 
         self.lm_options = mp.tasks.vision.FaceLandmarkerOptions(
-            base_options=self.BaseOptions(model_asset_path="./weights/face_landmarker.task"),
+            base_options=self.BaseOptions(model_asset_path=os.path.join(script_dir, "weights/face_landmarker.task")),
             running_mode=self.VisionRunningMode.IMAGE)
 
         self.fl_detector = self.FaceLandmarker.create_from_options(self.lm_options)

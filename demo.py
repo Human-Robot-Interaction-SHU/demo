@@ -1,137 +1,70 @@
-from modules.models import EyeTrackingForEveryone
-from modules.AttentionModule import AttentionModule
-import torch
+import asyncio
+from application.VideoEmotionsRecognizer import VideoEmotionsRecognizer
+from application.body_pose.PoseDetectionModule import PoseDetectionModule
+from application.content_of_speech.ContentOfSpeechModule import ContentOfSpeechEmotionRecognizer
+from application.attention.AttentionModule import AttentionModule
 import cv2 as cv
-from screeninfo import get_monitors
-from matplotlib import pyplot as plt
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
-import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+from application.face_analysis.FaceDetectionModule import FaceDetectionModule
+from io_modules.DisplayModule import DisplayModule
+from io_modules.CameraAndMonitorModule import CameraAndMonitorModule
 
-# Pose detection
-from mediapipe.tasks.python.components.containers.landmark import NormalizedLandmark
-from mediapipe.tasks.python.vision.gesture_recognizer import GestureRecognizerResult
-from mediapipe.tasks.python import BaseOptions, vision
-import mediapipe as mp
-
-# Facial recognition
-from deepface import DeepFace
-
-# Get monitor size to set the size of the output image later
-try:
-    monitor = get_monitors()
-    screen_width = monitor[0].width
-    screen_height = monitor[0].height
-except:
-    print("No monitors found")
-    screen_width=1920
-    screen_height=1080
-
-# Attention modules
-model = EyeTrackingForEveryone()
-model.load_state_dict(torch.load("./weights/attention_weights"))
-attn = AttentionModule(model.to('cuda'))
+content_of_speech = ContentOfSpeechEmotionRecognizer()
 
 
-# Pose detection
-
-handSign = ""
-handPosition: NormalizedLandmark = NormalizedLandmark(x=0.5, y=0.5)
-
-
-def setResults(result: GestureRecognizerResult, output_image: mp.Image, timestamp_ms: int):
-    if result.gestures and result.gestures[0]:
-        global handSign
-        global handPosition
-        handSign = result.gestures[0][0].category_name
-        handPosition = result.hand_landmarks[0][0]
+# Function to run an async task in a thread
+def run_async_in_thread(async_func):
+    try:
+        return asyncio.run(async_func)
+    except Exception as e:
+        print(f"Exception caught in thread: {e}")
 
 
-mp_drawing = mp.solutions.drawing_utils
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+async def execute_tasks_in_thread_async():
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as executor:
+        # Schedule async tasks to run in separate threads
+        speech_task = loop.run_in_executor(executor, run_async_in_thread, content_of_speech.run())
+        video_task = loop.run_in_executor(executor, run_async_in_thread, run_video_detection())
 
-model_path = ('./weights/gesture_recognizer.task')
-
-base_options = BaseOptions(model_asset_path=model_path)
-VisionRunningMode = mp.tasks.vision.RunningMode
-options = vision.GestureRecognizerOptions(base_options=base_options, running_mode=VisionRunningMode.LIVE_STREAM,
-                                          result_callback=setResults)
-sign_recognizer = vision.GestureRecognizer.create_from_options(options)
-frame_number = 0
-
-# end pose detection
+        # Wait for both tasks to complete (they won't in this case, as they run indefinitely)
+        await asyncio.gather(video_task, speech_task)
 
 
-# facial expression
+async def run_video_detection():
+    cam_monitor = CameraAndMonitorModule()
+    display = DisplayModule(cam_monitor)
 
-# initialize the Haar Cascade face detection model
-face_cascade = cv.CascadeClassifier(  # Create a CascadeClassifier object
-    cv.samples.findFile(cv.data.haarcascades + 'haarcascade_frontalface_default.xml'))
+    attn = AttentionModule()
+    pose_module = PoseDetectionModule()
+    face_module = FaceDetectionModule()
 
+    video_emotions_recognizer = VideoEmotionsRecognizer(attn, pose_module, face_module)
 
-# for output image
-font = ImageFont.truetype("/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf", 36)
+    frame_number = 0
 
-cam = cv.VideoCapture(0)
-cam.set(cv.CAP_PROP_FRAME_WIDTH, 1280)
-cam.set(cv.CAP_PROP_FRAME_HEIGHT, 720)
+    while cam_monitor.cam.isOpened():
+        result, image = cam_monitor.cam.read()
 
+        # tracking frame number for pose detection
+        frame_number += 1
 
+        # image successfully read from webcam
+        if result:
+            res = video_emotions_recognizer.get_emotion_results_from_models(image, frame_number)
+            audio_emo = content_of_speech.emotion_results[len(content_of_speech.emotion_results)-1] \
+                if len(content_of_speech.emotion_results) > 0 else None
+            display.display_results(image, res, audio_emo)
 
-while True:
-    result, image = cam.read()
+        else:
+            print("Failed to get image from webcam")
 
-    # tracking frame number for pose detection
-    frame_number += 1
+        if cv.waitKey(1) & 0xFF == ord('q'):  # quit when 'q' is pressed
+            del cam_monitor
+            break
 
-    # output image
-    out_img = Image.new('RGB', (screen_width, screen_height), color = (153, 153, 255))
-    out_img_draw = ImageDraw.Draw(out_img)
-    # image successfully read from webcam
-    if result:
+    del cam_monitor
+    cv.destroyAllWindows()
 
-        # attention
-        attention_out = attn.get_x_y_from_image(image)
-        # attention can fail if no face detected
-        if attention_out[0] is not False:
-
-            # Draw circle where gaze detected
-            out_img_draw.arc([(attention_out[0][0]-25, attention_out[0][1]-25),(attention_out[0][0]+25, attention_out[0][1]+25)], start=0, end=360, fill=(255, 255, 255))
-            out_img_draw.text((1000, 10), f"Gaze location : {int(attention_out[0][0])}, {int(attention_out[0][1])}", font=font)
-            print(attention_out[0][0])
-
-        # body pose
-        frame_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
-        sign_recognizer.recognize_async(mp_image, frame_number)
-        pose_results = pose.process(frame_rgb)
-        mp_drawing.draw_landmarks(image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-
-        # facial expression
-        gray = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
-        faces = face_cascade.detectMultiScale(gray)
-        try:
-            result = DeepFace.analyze(image, actions=['emotion'])
-            dominant_emotion = result[0]['dominant_emotion']
-        except ValueError:
-            print("no face detected")
-            dominant_emotion = "No emotion detected"
-
-
-        if dominant_emotion != "No emotion detected":
-            out_img_draw.text((10, 10), dominant_emotion, font=font)
-
-    else:
-        print("Failed to get image from webcam")
-
-    out_img.paste(Image.fromarray(image), box=(0,0))
-
-    cv.imshow("Demo", np.asarray(out_img)) # This will open an independent window
-
-    if cv.waitKey(1) & 0xFF==ord('q'): # quit when 'q' is pressed
-        cam.release()
-        break
-
-
-cam.release()
-cv.destroyAllWindows()
+if __name__ == "__main__":
+    asyncio.run(execute_tasks_in_thread_async())
