@@ -23,12 +23,12 @@ class AudioEmotionRecognizer:
 
         def run_speech():
             # Initialize MicrophoneStream
-            with MicrophoneStream(RATE, CHUNK) as stream:
+            with MicrophoneStream(AUDIO_SAMPLE_RATE, CHUNK) as stream:
                 audio_generator = stream.generator()
                 self.content_of_speech.run(audio_generator)
         def run_tone():
 
-            with MicrophoneStream(RATE, CHUNK) as stream:
+            with MicrophoneStream(AUDIO_SAMPLE_RATE, CHUNK) as stream:
                 audio_generator = stream.generator()
                 accumulated_chunks = []
                 for chunk in audio_generator:
