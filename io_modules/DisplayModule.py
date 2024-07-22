@@ -43,7 +43,7 @@ class DisplayModule:
         out_img_draw.text((10, 10), f"Face: {dominant_emotion}", font=self.cam_display.font)
 
     def draw_tone_result(self, tone=None):
-        self.out_img_draw.text((self.cam_display.screen_width - 300, self.cam_display.screen_height - 200),
+        self.out_img_draw.text((self.cam_display.screen_width - 400, self.cam_display.screen_height - 200),
                                "Tone: " + tone if tone else "Tone: -- ", font=self.cam_display.font)
 
 
