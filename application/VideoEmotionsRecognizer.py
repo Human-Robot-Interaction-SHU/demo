@@ -42,7 +42,7 @@ class VideoEmotionsRecognizer:
                     print(f"An error occurred: {e}")
                     dominant_emotion = "No emotion detected"
             else:
-                print("No faces detected in the image.")
+                # print("No faces detected in the image.")
                 dominant_emotion = "No emotion detected"
             return dominant_emotion
 
