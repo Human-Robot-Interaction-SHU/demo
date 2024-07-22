@@ -26,7 +26,7 @@ class AudioEmotionRecognizer:
             with MicrophoneStream(AUDIO_SAMPLE_RATE, CHUNK) as stream:
                 audio_generator = stream.generator()
                 self.content_of_speech.run(audio_generator)
-                
+
         def run_tone():
 
             with MicrophoneStream(AUDIO_SAMPLE_RATE, CHUNK) as stream:
@@ -37,7 +37,7 @@ class AudioEmotionRecognizer:
                     if len(accumulated_chunks) >= 79:
                         # Combine accumulated chunks into one byte array
                         audio_data = b"".join(accumulated_chunks)
-                        res = self.tone_of_voice_module.process_audio(audio_data)  # Process the accumulated audio
+                        self.tone_of_voice_module.process_audio(audio_data)  # Process the accumulated audio
                         accumulated_chunks = []  # Reset the accumulated chunks
 
         thread1 = threading.Thread(target=run_speech)

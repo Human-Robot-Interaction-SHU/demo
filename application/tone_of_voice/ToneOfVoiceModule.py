@@ -36,7 +36,7 @@ class ToneOfVoiceModule:
         return wav_io
 
     def process_audio(self, audio_bytes):
-        print("Processing audio for emotion prediction...")
+        #print("Processing audio for emotion prediction...")
 
         # Convert audio bytes to WAV file-like object
         audio_file = self.create_wav(audio_bytes)
@@ -50,6 +50,6 @@ class ToneOfVoiceModule:
 
         main_emotion = sorted(result, key=lambda x: x['score'], reverse=True)[0]
 
-        print(f"Top Emotion: {main_emotion['label']}, Score: {main_emotion['score']:.4f}")
+        #print(f"Top Emotion: {main_emotion['label']}, Score: {main_emotion['score']:.4f}")
 
         self.emotion_results.append(main_emotion['label'])
