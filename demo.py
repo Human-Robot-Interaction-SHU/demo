@@ -11,6 +11,7 @@ from io_modules.CameraAndMonitorModule import CameraAndMonitorModule
 
 audio_emotions_recognizer = AudioEmotionRecognizer()
 
+
 # Function to run an async task in a thread
 def run_async_in_thread(async_func):
     try:

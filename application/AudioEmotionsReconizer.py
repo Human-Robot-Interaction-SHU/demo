@@ -23,6 +23,7 @@ def calculate_chunks_for_seconds(rate, chunk_size, seconds):
     number_of_chunks = (frames_needed + chunk_size - 1) // chunk_size  # Ceiling division
     return number_of_chunks
 
+
 class AudioEmotionRecognizer:
 
     def __init__(self):
@@ -58,13 +59,6 @@ class AudioEmotionRecognizer:
         thread1.join()
         thread2.join()
 
-
-
-# Audio recording parameters
-
-
-
-# Global list to store emotion data
 
 class MicrophoneStream:
     """Opens a recording stream as a generator yielding the audio chunks."""
@@ -114,4 +108,3 @@ class MicrophoneStream:
                 except queue.Empty:
                     break
             yield b"".join(data)
-
