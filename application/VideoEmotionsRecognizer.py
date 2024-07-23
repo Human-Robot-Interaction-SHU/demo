@@ -33,7 +33,8 @@ class VideoEmotionsRecognizer:
             faces = self.face_module.face_cascade.detectMultiScale(gray)
             if len(faces) > 0:
                 try:
-                    analysis_result = self.face_module.detect_emotion(img)
+                    x, y, w, h = faces[0]
+                    analysis_result = self.face_module.detect_emotion(img[y:y+h, x:x+w])
                     dominant_emotion = analysis_result[0]['dominant_emotion']
                 except ValueError as ve:
                     print(f"ValueError: {ve}")
