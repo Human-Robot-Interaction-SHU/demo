@@ -11,14 +11,12 @@ from io_modules.CameraAndMonitorModule import CameraAndMonitorModule
 
 audio_emotions_recognizer = AudioEmotionRecognizer()
 
-
 # Function to run an async task in a thread
 def run_async_in_thread(async_func):
     try:
         return asyncio.run(async_func)
     except Exception as e:
         print(f"Exception caught in thread: {e}")
-
 
 async def execute_tasks_in_thread_async():
     loop = asyncio.get_running_loop()
@@ -29,7 +27,6 @@ async def execute_tasks_in_thread_async():
 
         # Wait for both tasks to complete (they won't in this case, as they run indefinitely)
         await asyncio.gather(video_task, speech_task)
-
 
 async def run_video_detection():
     cam_monitor = CameraAndMonitorModule()
@@ -49,19 +46,15 @@ async def run_video_detection():
         # tracking frame number for pose detection
         frame_number += 1
 
-        # image successfully read from webcam
-        if result:
+        # Process every 30th frame
+        if frame_number % 30 == 0 and result:
             res = video_emotions_recognizer.get_emotion_results_from_models(image, frame_number)
-            content_of_speech_result = audio_emotions_recognizer.content_of_speech.emotion_results[len(audio_emotions_recognizer.content_of_speech.emotion_results)-1] \
-                if len(audio_emotions_recognizer.content_of_speech.emotion_results) > 0 else None
+            content_of_speech_result = audio_emotions_recognizer.content_of_speech.emotion_results[-1] if audio_emotions_recognizer.content_of_speech.emotion_results else None
 
-            tone_of_voice_result = audio_emotions_recognizer.tone_of_voice_module.emotion_results[
-                len(audio_emotions_recognizer.tone_of_voice_module.emotion_results) - 1] \
-                if len(audio_emotions_recognizer.tone_of_voice_module.emotion_results) > 0 else None
+            tone_of_voice_result = audio_emotions_recognizer.tone_of_voice_module.emotion_results[-1] if audio_emotions_recognizer.tone_of_voice_module.emotion_results else None
 
             display.display_results(image, res, content_of_speech_result, tone_of_voice_result)
-
-        else:
+        elif not result:
             print("Failed to get image from webcam")
 
         if cv.waitKey(1) & 0xFF == ord('q'):  # quit when 'q' is pressed
