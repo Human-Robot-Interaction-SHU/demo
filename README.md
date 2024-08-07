@@ -4,6 +4,11 @@
 This demo demonstrates the combination of varius recognation and detection models to enable communication between robot and humans.
 
 
+## Preview
+
+![WhatsApp Image 2024-07-24 at 22 38 00](https://github.com/user-attachments/assets/b7bfce50-47cc-4020-a354-edf8b54fbc98)
+
+
 ## Project Structure:
 
 ```
