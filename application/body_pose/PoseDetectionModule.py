@@ -7,7 +7,6 @@ from mediapipe.tasks.python.vision.gesture_recognizer import GestureRecognizerRe
 
 # Get the absolute path of the current script
 script_path = os.path.abspath(__file__)
-
 # Get the directory of the current script
 script_dir = os.path.dirname(script_path)
 

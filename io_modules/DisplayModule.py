@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw
 import numpy as np
 import mediapipe as mp
 
+
 class DisplayModule:
 
     def __init__(self, cam_display_mod):
@@ -94,3 +95,9 @@ class DisplayModule:
         self.draw_face_result(video_results["face"], self.out_img_draw)
 
         cv.imshow("Demo", np.asarray(self.out_img))  # This will open an independent window
+
+    def display_unprocessed(self, img):
+        resized_image = cv.resize(img, (self.cam_display.screen_width, self.cam_display.screen_height), interpolation=cv.INTER_AREA)
+        resized_image_pil = Image.fromarray(resized_image)
+        self.out_img.paste(resized_image_pil, (0, 0))
+        cv.imshow("Demo", np.asarray(self.out_img))

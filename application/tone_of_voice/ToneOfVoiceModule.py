@@ -4,7 +4,6 @@ import librosa
 import io
 import pyaudio
 from pydub import AudioSegment
-
 from application.SharedConstants import AUDIO_SAMPLE_RATE
 
 
@@ -49,7 +48,6 @@ class ToneOfVoiceModule:
         result = self.classifier(audio)
 
         main_emotion = sorted(result, key=lambda x: x['score'], reverse=True)[0]
-
         #print(f"Top Emotion: {main_emotion['label']}, Score: {main_emotion['score']:.4f}")
 
         self.emotion_results.append(main_emotion['label'])
